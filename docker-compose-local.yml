@@ -1,0 +1,50 @@
+name: book-village-backend-local
+
+services:
+  db:
+    image: mysql:8.4
+    container_name: book-village-local-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:-1234}"
+      MYSQL_DATABASE: "${MYSQL_DATABASE:-bookvillage_mock}"
+    ports:
+      - "${MYSQL_PORT:-3407}:3306"
+    volumes:
+      - mysql-local-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD:-1234}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks:
+      - book-village-local-net
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: book-village-backend-local
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: "jdbc:mysql://db:3306/${MYSQL_DATABASE:-bookvillage_mock}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+      SPRING_DATASOURCE_USERNAME: "root"
+      SPRING_DATASOURCE_PASSWORD: "${MYSQL_ROOT_PASSWORD:-1234}"
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    volumes:
+      - backend-uploads-local:/app/uploads
+    networks:
+      - book-village-local-net
+
+volumes:
+  mysql-local-data:
+  backend-uploads-local:
+
+networks:
+  book-village-local-net:
+    external: true
+    name: book-village-local-net
