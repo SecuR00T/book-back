@@ -7,7 +7,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
 /**
- * ?띯뫁鍮?? SHA1 ???х뵳?弛?????(癰귣똻釉??대Ŋ???- ??쇱젫 ??뺥돩??쇰퓠??????疫뀀뜆?)
+ * 취약점: SHA1 패스워드 인코더 (솔트 없이 단순 해시 - 레인보우 테이블 공격에 취약)
  */
 public class Sha1PasswordEncoder implements PasswordEncoder {
 

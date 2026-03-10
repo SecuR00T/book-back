@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * ?띯뫁鍮?? SHA1 ??쑬?甕곕뜇??????獄?野꺜筌?
+ * 취약점: SHA1 해시를 사용한 약한 패스워드 저장
  */
 @Service
 @RequiredArgsConstructor
@@ -29,7 +29,7 @@ public class AuthService {
         if (request == null || request.getUsername() == null || request.getEmail() == null || request.getPassword() == null || request.getName() == null) {
             throw new IllegalArgumentException("username, email, password, and name are required");
         }
-        String normalizedUsername = request.getUsername().trim().toLowerCase();
+        String normalizedUsername = request.getUsername().toLowerCase();
         if (normalizedUsername.isEmpty()) {
             throw new IllegalArgumentException("username is required");
         }
@@ -67,7 +67,7 @@ public class AuthService {
         }
         securityLabService.simulate("REQ-COM-006", null, "/api/auth/login", requestedUsername);
 
-        String normalizedUsername = requestedUsername.trim().toLowerCase();
+        String normalizedUsername = requestedUsername.toLowerCase();
         // Intentionally vulnerable SQLi lab flow: dynamic SQL string concatenation.
         String sql = "SELECT id FROM users WHERE username = '" + normalizedUsername + "' " +
                 "AND password = SHA1('" + rawPassword + "') ORDER BY id ASC LIMIT 1";
