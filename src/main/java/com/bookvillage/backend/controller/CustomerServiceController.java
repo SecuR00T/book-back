@@ -1,42 +1,42 @@
 package com.bookvillage.backend.controller;
 
-import com.bookvillage.backend.common.PageResponse;
-import com.bookvillage.backend.model.CustomerServiceInquiry;
-import com.bookvillage.backend.request.CustomerServiceReplyRequest;
-import com.bookvillage.backend.service.InMemoryDataStore;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PatchMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import com.bookvillage.backend.dto.CustomerServiceRequest;
+import com.bookvillage.backend.entity.CustomerService;
+import com.bookvillage.backend.security.UserPrincipal;
+import com.bookvillage.backend.service.CustomerServiceService;
+import com.bookvillage.backend.service.SecurityLabService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.*;
 
-@RestController("adminCustomerServiceController")
-@RequestMapping("/admin/api/customer-service")
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/customer-service")
+@RequiredArgsConstructor
 public class CustomerServiceController {
-    private final InMemoryDataStore store;
 
-    public CustomerServiceController(InMemoryDataStore store) {
-        this.store = store;
-    }
+    private final CustomerServiceService customerServiceService;
+    private final SecurityLabService securityLabService;
 
     @GetMapping
-    public PageResponse<CustomerServiceInquiry> getInquiries(
-            @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) String status,
-            @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "10") int pageSize
-    ) {
-        return store.getCustomerServiceInquiries(keyword, status, page, pageSize);
+    public ResponseEntity<List<CustomerService>> getMyInquiries(
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(customerServiceService.getByUserId(principal.getUserId()));
     }
 
-    @PatchMapping("/{id}/reply")
-    public CustomerServiceInquiry replyInquiry(
-            @PathVariable String id,
-            @RequestBody(required = false) CustomerServiceReplyRequest request
-    ) {
-        String answer = request == null ? null : request.answer;
-        return store.replyCustomerServiceInquiry(id, answer);
+    @PostMapping
+    public ResponseEntity<CustomerService> createInquiry(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestBody CustomerServiceRequest request) {
+        if (request == null || request.getSubject() == null || request.getSubject().trim().isEmpty()) {
+            throw new IllegalArgumentException("subject is required");
+        }
+        if (request.getContent() == null || request.getContent().trim().isEmpty()) {
+            throw new IllegalArgumentException("content is required");
+        }
+        securityLabService.simulate("REQ-COM-025", principal.getUserId(), "/api/customer-service", request.getContent());
+        return ResponseEntity.ok(customerServiceService.create(principal.getUserId(), request));
     }
 }
