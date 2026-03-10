@@ -93,10 +93,10 @@ public class InMemoryDataStore {
 
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
-    private final com.bookvillage.mock.service.S3StorageService s3StorageService;
+    private final S3StorageService s3StorageService;
     private final Path adminImageDir = Paths.get("uploads", "admin-products").toAbsolutePath().normalize();
 
-    public InMemoryDataStore(JdbcTemplate jdbcTemplate, com.bookvillage.mock.service.S3StorageService s3StorageService) {
+    public InMemoryDataStore(JdbcTemplate jdbcTemplate, S3StorageService s3StorageService) {
         this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = new ObjectMapper();
         this.s3StorageService = s3StorageService;

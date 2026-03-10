@@ -1,13 +1,13 @@
-package com.bookvillage.mock.integration;
+package com.bookvillage.backend.integration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.bookvillage.mock.entity.Book;
-import com.bookvillage.mock.entity.Coupon;
-import com.bookvillage.mock.entity.User;
-import com.bookvillage.mock.repository.BookRepository;
-import com.bookvillage.mock.repository.CouponRepository;
-import com.bookvillage.mock.repository.OrderRepository;
-import com.bookvillage.mock.repository.UserRepository;
+import com.bookvillage.backend.entity.Book;
+import com.bookvillage.backend.entity.Coupon;
+import com.bookvillage.backend.entity.User;
+import com.bookvillage.backend.repository.BookRepository;
+import com.bookvillage.backend.repository.CouponRepository;
+import com.bookvillage.backend.repository.OrderRepository;
+import com.bookvillage.backend.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

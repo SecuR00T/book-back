@@ -1,7 +1,7 @@
 package com.bookvillage.backend.controller;
 
-import com.bookvillage.mock.dto.NoticeDto;
-import com.bookvillage.mock.service.LearningFeatureService;
+import com.bookvillage.backend.dto.NoticeDto;
+import com.bookvillage.backend.service.LearningFeatureService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;

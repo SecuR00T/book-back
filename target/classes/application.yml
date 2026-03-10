@@ -25,11 +25,16 @@ server:
   port: 8080
   servlet:
     context-path: /
+  error:
+    include-message: always
+    include-stacktrace: always
+    include-exception: true
+    include-binding-errors: always
 
-# Local file storage for receipts (Path Traversal vulnerability context)
 file:
   storage-path: ./uploads/receipts
   base-path: ./uploads
+  lab-upload-path: ./uploads/lab
 
 cloud:
   aws:
@@ -48,4 +53,7 @@ springdoc:
     path: /v3/api-docs
   swagger-ui:
     path: /swagger-ui.html
+
+jwt:
+  expiration: 315360000
 

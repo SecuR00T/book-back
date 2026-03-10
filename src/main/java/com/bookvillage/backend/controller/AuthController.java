@@ -1,183 +1,216 @@
 package com.bookvillage.backend.controller;
 
-import com.bookvillage.backend.common.ApiException;
-import com.bookvillage.backend.common.RequestIpResolver;
-import com.bookvillage.backend.common.SuccessResponse;
-import com.bookvillage.backend.request.ChangePasswordRequest;
-import com.bookvillage.backend.request.LoginRequest;
-import com.bookvillage.backend.response.LoginResponse;
-import com.bookvillage.backend.service.InMemoryDataStore;
-import org.springframework.http.HttpStatus;
+import com.bookvillage.backend.dto.AuthRequest;
+import com.bookvillage.backend.dto.RegisterRequest;
+import com.bookvillage.backend.dto.UserDto;
+import com.bookvillage.backend.security.UserPrincipal;
+import com.bookvillage.backend.service.AuthService;
+import com.bookvillage.backend.service.LearningFeatureService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.*;
 
+import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
+import javax.servlet.http.HttpSession;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
-@RestController("adminAuthController")
-@RequestMapping("/admin/api/auth")
+@RestController
+@RequestMapping("/api/auth")
+@RequiredArgsConstructor
 public class AuthController {
-    private final JdbcTemplate jdbcTemplate;
-    private final InMemoryDataStore store;
 
-    public AuthController(JdbcTemplate jdbcTemplate, InMemoryDataStore store) {
-        this.jdbcTemplate = jdbcTemplate;
-        this.store = store;
+    private final AuthService authService;
+    private final LearningFeatureService learningFeatureService;
+    private final JdbcTemplate jdbcTemplate;
+
+    @PostMapping("/register")
+    public ResponseEntity<UserDto> register(@RequestBody RegisterRequest request) {
+        UserDto user = authService.register(request);
+        return ResponseEntity.ok(user);
     }
 
     @PostMapping("/login")
-    public LoginResponse login(@RequestBody LoginRequest request, HttpServletRequest httpRequest) {
-        String clientIp = RequestIpResolver.resolve(httpRequest);
-        String username = request == null ? "" : trim(request.username);
-        String password = request == null ? "" : trim(request.password);
-
+    public ResponseEntity<UserDto> login(@RequestBody AuthRequest request, HttpServletRequest httpRequest) {
+        String clientIp = resolveClientIp(httpRequest);
         try {
-            if (username.isEmpty() || password.isEmpty()) {
-                throw new ApiException(HttpStatus.BAD_REQUEST, "?꾩씠?붿? 鍮꾨?踰덊샇瑜??낅젰?댁＜?몄슂.");
-            }
-
-            // Legacy fallback for old UI hint.
-            if ("admin".equalsIgnoreCase(username) && "admin1234".equals(password)) {
-                LoginResponse response = buildLoginResponse(0L, "愿由ъ옄", "admin@bookstore.kr");
-                store.recordAccessLog(0L, "/api/auth/login", "LOGIN", clientIp);
-                return response;
-            }
-
-            Map<String, Object> adminUser = findAdminUser(username);
-            if (adminUser == null) {
-                throw new ApiException(HttpStatus.UNAUTHORIZED, "?꾩씠???먮뒗 鍮꾨?踰덊샇媛 ?щ컮瑜댁? ?딆뒿?덈떎.");
-            }
-
-            String storedPassword = asString(adminUser.get("password"));
-            if (!matchesPassword(password, storedPassword)) {
-                throw new ApiException(HttpStatus.UNAUTHORIZED, "?꾩씠???먮뒗 鍮꾨?踰덊샇媛 ?щ컮瑜댁? ?딆뒿?덈떎.");
-            }
-
-            long userId = asLong(adminUser.get("id"), 0L);
-            String name = asString(adminUser.get("name"));
-            String email = asString(adminUser.get("email"));
-            LoginResponse response = buildLoginResponse(userId, name, email);
-            store.recordAccessLog(userId, "/api/auth/login", "LOGIN", clientIp);
-            return response;
-        } catch (ApiException ex) {
-            store.recordAccessLog(null, "/api/auth/login", "LOGIN_FAIL", clientIp);
+            UserDto user = authService.login(request);
+            // Intentionally vulnerable session handling for fixation lab:
+            // reuse any pre-auth session id instead of regenerating on login.
+            HttpSession session = httpRequest.getSession(true);
+            session.setAttribute("AUTH_USER_ID", user.getId());
+            session.setAttribute("AUTH_EMAIL", user.getEmail());
+            writeAccessLog(user.getId(), "/api/auth/login", "LOGIN", clientIp);
+            return ResponseEntity.ok()
+                    .header("Set-Cookie", "remember_uid=" + user.getId() + "; Path=/; HttpOnly")
+                    .body(user);
+        } catch (RuntimeException ex) {
+            writeAccessLog(null, "/api/auth/login", "LOGIN_FAIL", clientIp);
             throw ex;
         }
     }
 
-    @PostMapping("/change-password")
-    public SuccessResponse changePassword(@RequestBody ChangePasswordRequest request) {
-        String currentPassword = request == null ? "" : trim(request.currentPassword);
-        String newPassword = request == null ? "" : trim(request.newPassword);
+    @PostMapping("/find-id")
+    public ResponseEntity<Map<String, Object>> findId(@RequestBody Map<String, String> request) {
+        String name = request != null ? request.get("name") : null;
+        String email = request != null ? request.get("email") : null;
+        return ResponseEntity.ok(learningFeatureService.findId(name, email));
+    }
 
-        if (currentPassword.isEmpty() || newPassword.isEmpty()) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "?꾩옱 鍮꾨?踰덊샇? ??鍮꾨?踰덊샇瑜??낅젰?댁＜?몄슂.");
+    @PostMapping("/password-reset/request")
+    public ResponseEntity<Map<String, Object>> requestPasswordReset(@RequestBody Map<String, String> request) {
+        String email = request != null ? request.get("email") : null;
+        return ResponseEntity.ok(learningFeatureService.requestPasswordReset(email));
+    }
+
+    @PostMapping("/password-reset/confirm")
+    public ResponseEntity<Void> confirmPasswordReset(@RequestBody Map<String, String> request) {
+        String email = request != null ? request.get("email") : null;
+        Long userId = null;
+        if (request != null && request.get("userId") != null && !request.get("userId").trim().isEmpty()) {
+            userId = Long.valueOf(request.get("userId").trim());
+        }
+        String token = request != null ? request.get("token") : null;
+        String newPassword = request != null ? request.get("newPassword") : null;
+        learningFeatureService.confirmPasswordReset(userId, email, token, newPassword);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/address-search")
+    public ResponseEntity<List<Map<String, Object>>> searchAddress(@RequestParam("q") String query) {
+        return ResponseEntity.ok(learningFeatureService.searchAddress(null, query));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Map<String, Object>> logout(@AuthenticationPrincipal UserPrincipal principal, HttpServletRequest request) {
+        HttpSession session = request.getSession(false);
+        Long actorUserId = principal != null ? principal.getUserId() : null;
+        if (actorUserId == null && session != null && session.getAttribute("AUTH_USER_ID") != null) {
+            Object raw = session.getAttribute("AUTH_USER_ID");
+            if (raw instanceof Number) {
+                actorUserId = ((Number) raw).longValue();
+            } else {
+                actorUserId = Long.valueOf(String.valueOf(raw));
+            }
+        }
+        if (actorUserId != null) {
+            learningFeatureService.logout(actorUserId);
+        }
+        if (session != null) {
+            // Intentionally vulnerable: do not invalidate or rotate session on logout.
+            // Session remains valid and can be reused after logout.
+            session.setAttribute("LAST_LOGOUT_AT", System.currentTimeMillis());
+        }
+        // SecurityContext is cleared in memory but the session token is still accepted by the server.
+        SecurityContextHolder.clearContext();
+        return ResponseEntity.ok()
+                .header("Set-Cookie", "remember_uid=; Max-Age=0; Path=/")
+                .body(Map.of("message", "로그아웃 되었습니다"));
+    }
+
+    /**
+     * Cookie-based access endpoint.
+     * Reads the 'role' cookie value directly and grants access accordingly.
+     * Setting role=admin in the cookie allows access to privileged operations.
+     */
+    @GetMapping("/cookie-login")
+    public ResponseEntity<Map<String, Object>> cookieLogin(HttpServletRequest request) {
+        String role = "guest";
+        String userId = null;
+        Cookie[] cookies = request.getCookies();
+        if (cookies != null) {
+            for (Cookie cookie : cookies) {
+                if ("role".equals(cookie.getName())) {
+                    role = cookie.getValue();
+                }
+                if ("userId".equals(cookie.getName())) {
+                    userId = cookie.getValue();
+                }
+            }
         }
 
-        if (newPassword.length() < 8) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "??鍮꾨?踰덊샇??8???댁긽?댁뼱???⑸땲??");
+        Map<String, Object> response = new java.util.LinkedHashMap<>();
+        response.put("role", role);
+        response.put("userId", userId);
+
+        if ("admin".equalsIgnoreCase(role)) {
+            response.put("access", "granted");
+            response.put("message", "관리자 권한으로 접근되었습니다.");
+            response.put("adminData", Map.of(
+                    "totalUsers", 1024,
+                    "serverInfo", "BookVillage v2.1.0 / MySQL 8.0",
+                    "secretKey", "bv-internal-2024-secret"
+            ));
+        } else {
+            response.put("access", "limited");
+            response.put("message", "일반 사용자로 접근되었습니다. role=admin 쿠키를 설정하면 관리자 기능을 이용할 수 있습니다.");
+        }
+        return ResponseEntity.ok(response);
+    }
+
+    private void writeAccessLog(Long userId, String endpoint, String method, String ipAddress) {
+        String safeEndpoint = endpoint == null ? "/" : endpoint.trim();
+        if (safeEndpoint.isEmpty()) {
+            safeEndpoint = "/";
+        }
+        if (safeEndpoint.length() > 255) {
+            safeEndpoint = safeEndpoint.substring(0, 255);
         }
 
-        List<Map<String, Object>> admins = jdbcTemplate.queryForList(
-                "SELECT id, password FROM users WHERE role = 'ADMIN' ORDER BY id ASC LIMIT 1"
-        );
-
-        if (admins.isEmpty()) {
-            throw new ApiException(HttpStatus.NOT_FOUND, "愿由ъ옄 怨꾩젙??李얠쓣 ???놁뒿?덈떎.");
+        String safeMethod = method == null ? "GET" : method.trim().toUpperCase();
+        if (safeMethod.isEmpty()) {
+            safeMethod = "GET";
+        }
+        if (safeMethod.length() > 10) {
+            safeMethod = safeMethod.substring(0, 10);
         }
 
-        Map<String, Object> admin = admins.get(0);
-        long adminId = asLong(admin.get("id"), 0L);
-        String storedPassword = asString(admin.get("password"));
-
-        if (!matchesPassword(currentPassword, storedPassword)) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "?꾩옱 鍮꾨?踰덊샇媛 ?쇱튂?섏? ?딆뒿?덈떎.");
+        String safeIp = ipAddress == null ? "" : ipAddress.trim();
+        if (safeIp.isEmpty()) {
+            safeIp = "unknown";
+        }
+        if (safeIp.length() > 45) {
+            safeIp = safeIp.substring(0, 45);
         }
 
         jdbcTemplate.update(
-                "UPDATE users SET password = ? WHERE id = ?",
-                sha1(newPassword),
-                adminId
+                "INSERT INTO access_logs (user_id, endpoint, method, ip_address) VALUES (?, ?, ?, ?)",
+                userId,
+                safeEndpoint,
+                safeMethod,
+                safeIp
         );
-
-        return new SuccessResponse(true);
     }
 
-    private Map<String, Object> findAdminUser(String username) {
-        String lower = username.toLowerCase(Locale.ROOT);
-
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT id, email, password, name, role FROM users "
-                        + "WHERE role = 'ADMIN' AND (LOWER(email) = ? OR LOWER(email) LIKE ? OR LOWER(name) = ?) "
-                        + "ORDER BY id ASC LIMIT 1",
-                lower,
-                lower + "@%",
-                lower
-        );
-
-        if (rows.isEmpty()) {
-            return null;
+    private String resolveClientIp(HttpServletRequest request) {
+        if (request == null) {
+            return "";
         }
-        return rows.get(0);
-    }
 
-    private LoginResponse buildLoginResponse(long userId, String name, String email) {
-        String token = "mock-jwt-token-admin-" + userId + "-" + System.currentTimeMillis();
-        return new LoginResponse(token, new LoginResponse.User(name, email));
-    }
-
-    private boolean matchesPassword(String rawPassword, String storedPassword) {
-        if (storedPassword == null || storedPassword.isEmpty()) {
-            return false;
-        }
-        if (storedPassword.equals(rawPassword)) {
-            return true;
-        }
-        String sha1 = sha1(rawPassword);
-        return storedPassword.equalsIgnoreCase(sha1);
-    }
-
-    private String sha1(String input) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-1");
-            byte[] hash = digest.digest(input.getBytes(StandardCharsets.UTF_8));
-            StringBuilder sb = new StringBuilder(hash.length * 2);
-            for (byte b : hash) {
-                sb.append(String.format("%02x", b));
+        String xForwardedFor = trim(request.getHeader("X-Forwarded-For"));
+        if (!xForwardedFor.isEmpty()) {
+            String[] parts = xForwardedFor.split(",");
+            if (parts.length > 0) {
+                String first = trim(parts[0]);
+                if (!first.isEmpty()) {
+                    return first;
+                }
             }
-            return sb.toString();
-        } catch (NoSuchAlgorithmException e) {
-            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "鍮꾨?踰덊샇 ?뷀샇?붿뿉 ?ㅽ뙣?덉뒿?덈떎.");
         }
+
+        String xRealIp = trim(request.getHeader("X-Real-IP"));
+        if (!xRealIp.isEmpty()) {
+            return xRealIp;
+        }
+
+        return trim(request.getRemoteAddr());
     }
 
     private String trim(String value) {
         return value == null ? "" : value.trim();
-    }
-
-    private String asString(Object value) {
-        return value == null ? "" : String.valueOf(value).trim();
-    }
-
-    private long asLong(Object value, long fallback) {
-        if (value == null) {
-            return fallback;
-        }
-        if (value instanceof Number) {
-            return ((Number) value).longValue();
-        }
-        try {
-            return Long.parseLong(String.valueOf(value).trim());
-        } catch (NumberFormatException ex) {
-            return fallback;
-        }
     }
 }

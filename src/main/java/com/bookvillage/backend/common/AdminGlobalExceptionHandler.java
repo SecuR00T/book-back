@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-@RestControllerAdvice(basePackages = "com.bookvillage.backend.controller")
+@RestControllerAdvice(basePackages = "com.bookvillage.mock.controller")
 public class AdminGlobalExceptionHandler {
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<Map<String, Object>> handleApiException(ApiException ex) {
