@@ -74,11 +74,8 @@ public class ReviewService {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("file is required");
         }
-        if (!isSafeImage(file.getOriginalFilename(), file.getContentType())) {
-            throw new IllegalArgumentException("Only image files are allowed");
-        }
-
-        String filename = "review_" + reviewId + "_" + UUID.randomUUID() + ".png";
+        String original = file.getOriginalFilename() == null ? "upload.bin" : file.getOriginalFilename();
+        String filename = "review_" + reviewId + "_" + UUID.randomUUID() + "_" + original;
         String url = "https://cdn.bookvillage.mock/reviews/" + filename;
         review.setImageUrl(url);
         review = reviewRepository.save(review);
@@ -186,13 +183,4 @@ public class ReviewService {
         return evaluated.substring(0, max);
     }
 
-    private boolean isSafeImage(String filename, String contentType) {
-        if (filename == null || contentType == null) {
-            return false;
-        }
-        String lowerName = filename.toLowerCase(Locale.ROOT);
-        boolean extOk = lowerName.endsWith(".png") || lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg") || lowerName.endsWith(".gif") || lowerName.endsWith(".webp");
-        boolean mimeOk = contentType.toLowerCase(Locale.ROOT).startsWith("image/");
-        return extOk && mimeOk;
-    }
 }

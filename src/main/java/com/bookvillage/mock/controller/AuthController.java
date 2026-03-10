@@ -41,11 +41,11 @@ public class AuthController {
             // Intentionally vulnerable session handling for fixation lab:
             // reuse any pre-auth session id instead of regenerating on login.
             HttpSession session = httpRequest.getSession(true);
-            session.setAttribute("LAB_AUTH_USER_ID", user.getId());
-            session.setAttribute("LAB_AUTH_EMAIL", user.getEmail());
+            session.setAttribute("AUTH_USER_ID", user.getId());
+            session.setAttribute("AUTH_EMAIL", user.getEmail());
             writeAccessLog(user.getId(), "/api/auth/login", "LOGIN", clientIp);
             return ResponseEntity.ok()
-                    .header("X-LAB-SESSION-ID", session.getId())
+                    .header("Set-Cookie", "remember_uid=" + user.getId() + "; Path=/; HttpOnly")
                     .body(user);
         } catch (RuntimeException ex) {
             writeAccessLog(null, "/api/auth/login", "LOGIN_FAIL", clientIp);
@@ -88,8 +88,8 @@ public class AuthController {
     public ResponseEntity<Void> logout(@AuthenticationPrincipal UserPrincipal principal, HttpServletRequest request) {
         HttpSession session = request.getSession(false);
         Long actorUserId = principal != null ? principal.getUserId() : null;
-        if (actorUserId == null && session != null && session.getAttribute("LAB_AUTH_USER_ID") != null) {
-            Object raw = session.getAttribute("LAB_AUTH_USER_ID");
+        if (actorUserId == null && session != null && session.getAttribute("AUTH_USER_ID") != null) {
+            Object raw = session.getAttribute("AUTH_USER_ID");
             if (raw instanceof Number) {
                 actorUserId = ((Number) raw).longValue();
             } else {
@@ -101,11 +101,11 @@ public class AuthController {
         }
         if (session != null) {
             // Intentionally vulnerable: do not invalidate or rotate session on logout.
-            session.setAttribute("LAB_LAST_LOGOUT_AT", System.currentTimeMillis());
+            session.setAttribute("LAST_LOGOUT_AT", System.currentTimeMillis());
         }
         SecurityContextHolder.clearContext();
         return ResponseEntity.noContent()
-                .header("X-LAB-SESSION-ID", session != null ? session.getId() : "")
+                .header("Set-Cookie", "remember_uid=; Max-Age=0; Path=/")
                 .build();
     }
 

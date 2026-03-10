@@ -24,8 +24,12 @@ import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.sql.Timestamp;
@@ -34,11 +38,15 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Component
@@ -46,6 +54,7 @@ public class InMemoryDataStore {
     private static final DateTimeFormatter DATE_FORMAT = DateTimeFormatter.ISO_LOCAL_DATE;
     private static final DateTimeFormatter DATE_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final TypeReference<List<String>> STRING_LIST_TYPE = new TypeReference<List<String>>() {};
+    private static final Pattern DATA_URL_IMAGE_PATTERN = Pattern.compile("^data:image/([a-zA-Z0-9.+-]+);base64,(.+)$", Pattern.DOTALL);
 
     private static final String STATUS_ON_SALE = "판매중";
     private static final String STATUS_OUT_OF_STOCK = "품절";
@@ -84,6 +93,7 @@ public class InMemoryDataStore {
 
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
+    private final Path adminImageDir = Paths.get("uploads", "admin-products").toAbsolutePath().normalize();
 
     public InMemoryDataStore(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
@@ -146,7 +156,8 @@ public class InMemoryDataStore {
 
         int stock = Math.max(0, payload.stock);
         String isbn = trimToNull(payload.isbn13);
-        String coverImageUrl = firstImage(payload.images);
+        List<String> normalizedImages = normalizeProductImages(payload.images);
+        String coverImageUrl = firstImage(normalizedImages);
 
         KeyHolder keyHolder = new GeneratedKeyHolder();
 
@@ -185,7 +196,7 @@ public class InMemoryDataStore {
                 payload.salePrice,
                 normalizeProductStatus(payload.status, stock),
                 sanitizeStringList(payload.tags),
-                sanitizeStringList(payload.images)
+                normalizedImages
         );
 
         return getProduct(String.valueOf(bookId));
@@ -216,7 +227,8 @@ public class InMemoryDataStore {
         List<String> images = patch != null && patch.containsKey("images")
                 ? asStringList(patch.get("images"), existing.images)
                 : sanitizeStringList(existing.images);
-        String coverImageUrl = firstImage(images);
+        List<String> normalizedImages = normalizeProductImages(images);
+        String coverImageUrl = firstImage(normalizedImages);
 
         jdbcTemplate.update(
                 "UPDATE books SET isbn = ?, title = ?, author = ?, publisher = ?, category = ?, price = ?, stock = ?, "
@@ -245,7 +257,7 @@ public class InMemoryDataStore {
                 ? asStringList(patch.get("tags"), existing.tags)
                 : sanitizeStringList(existing.tags);
 
-        upsertBookMeta(bookId, subtitle, publishedDate, salePrice, status, tags, images);
+        upsertBookMeta(bookId, subtitle, publishedDate, salePrice, status, tags, normalizedImages);
         return getProduct(String.valueOf(bookId));
     }
 
@@ -1383,6 +1395,12 @@ public class InMemoryDataStore {
     }
 
     private void ensureSupportTables() {
+        try {
+            Files.createDirectories(adminImageDir);
+        } catch (IOException ignored) {
+            // ignore
+        }
+
         jdbcTemplate.execute(
                 "CREATE TABLE IF NOT EXISTS access_logs ("
                         + "id BIGINT AUTO_INCREMENT PRIMARY KEY,"
@@ -1552,6 +1570,58 @@ public class InMemoryDataStore {
     private String firstImage(List<String> images) {
         List<String> sanitized = sanitizeStringList(images);
         return sanitized.isEmpty() ? null : sanitized.get(0);
+    }
+
+    private List<String> normalizeProductImages(List<String> images) {
+        List<String> sanitized = sanitizeStringList(images);
+        List<String> normalized = new ArrayList<>();
+        for (String image : sanitized) {
+            String stored = storeDataUrlImage(image);
+            if (!isBlank(stored)) {
+                normalized.add(stored);
+            }
+        }
+        return normalized;
+    }
+
+    private String storeDataUrlImage(String image) {
+        if (isBlank(image)) {
+            return null;
+        }
+        String trimmed = image.trim();
+        if (!trimmed.startsWith("data:image/")) {
+            return trimmed;
+        }
+
+        Matcher matcher = DATA_URL_IMAGE_PATTERN.matcher(trimmed);
+        if (!matcher.matches()) {
+            return null;
+        }
+
+        String ext = matcher.group(1).toLowerCase(Locale.ROOT).replace("jpeg", "jpg");
+        String payload = matcher.group(2).replaceAll("\\s+", "");
+        byte[] bytes;
+        try {
+            bytes = Base64.getDecoder().decode(payload);
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
+
+        if (bytes.length == 0) {
+            return null;
+        }
+
+        String fileName = "book_" + UUID.randomUUID() + "." + ext;
+        Path target = adminImageDir.resolve(fileName).normalize();
+        if (!target.startsWith(adminImageDir)) {
+            return null;
+        }
+        try {
+            Files.write(target, bytes);
+            return "/admin/api/media/" + fileName;
+        } catch (IOException ex) {
+            return null;
+        }
     }
 
     private String asString(Map<String, Object> patch, String key, String fallback) {

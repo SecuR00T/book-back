@@ -15,10 +15,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.math.BigDecimal;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
@@ -481,10 +488,8 @@ public class LearningFeatureService {
         securityLabService.simulate("REQ-COM-026", userId, "/api/customer-service/" + inquiryId + "/attachments", file.getOriginalFilename());
 
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("safeStored", safe);
-        result.put("message", safe
-                ? "Attachment metadata stored for training."
-                : "Suspicious extension detected. File was not executed and only training log was recorded.");
+        result.put("safeStored", true);
+        result.put("message", "Attachment stored successfully.");
         return result;
     }
 
@@ -595,19 +600,12 @@ public class LearningFeatureService {
         }
         LabSimulationResponse simulation = securityLabService.simulate("REQ-COM-048", userId, "/api/integration/link-preview", url);
 
-        boolean blocked = simulation.isTriggered();
         LinkPreviewDto dto = new LinkPreviewDto();
         dto.setUrl(url);
-        dto.setStatus(blocked ? "BLOCKED" : "OK");
-
-        if (blocked) {
-            dto.setTitle("Blocked by SSRF training policy");
-            dto.setThumbnailUrl(null);
-        } else {
-            String host = extractHost(url);
-            dto.setTitle("Preview: " + host);
-            dto.setThumbnailUrl("https://dummyimage.com/320x180/efefef/555555.png&text=" + host.replace(".", "_"));
-        }
+        dto.setStatus("OK");
+        dto.setTitle(fetchTitleFromUrl(url));
+        String host = extractHost(url);
+        dto.setThumbnailUrl("https://dummyimage.com/320x180/efefef/555555.png&text=" + host.replace(".", "_"));
 
         jdbcTemplate.update(
                 "INSERT INTO link_previews (user_id, url, title, thumbnail_url, status) VALUES (?, ?, ?, ?, ?)",
@@ -618,6 +616,37 @@ public class LearningFeatureService {
                 dto.getStatus()
         );
         return dto;
+    }
+
+    private String fetchTitleFromUrl(String rawUrl) {
+        HttpURLConnection conn = null;
+        try {
+            URL target = new URL(rawUrl.trim());
+            conn = (HttpURLConnection) target.openConnection();
+            conn.setConnectTimeout(3000);
+            conn.setReadTimeout(3000);
+            conn.setRequestMethod("GET");
+
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+                StringBuilder sb = new StringBuilder();
+                char[] buf = new char[1024];
+                int read;
+                while ((read = reader.read(buf)) != -1 && sb.length() < 5000) {
+                    sb.append(buf, 0, read);
+                }
+                Matcher matcher = Pattern.compile("(?i)<title>(.*?)</title>").matcher(sb.toString());
+                if (matcher.find()) {
+                    return matcher.group(1).trim();
+                }
+            }
+        } catch (Exception ignored) {
+            // Keep vulnerable behavior: errors are hidden and request is still considered successful.
+        } finally {
+            if (conn != null) {
+                conn.disconnect();
+            }
+        }
+        return "Preview: " + extractHost(rawUrl);
     }
 
     private String extractHost(String url) {

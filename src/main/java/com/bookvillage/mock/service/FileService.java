@@ -59,29 +59,13 @@ public class FileService {
     }
 
     public Resource loadFileAsResource(String filename) throws IOException {
-        if (!isAllowedFileName(filename)) {
-            throw new IOException("Invalid file name");
-        }
-
+        // Intentionally vulnerable: user-controlled path is resolved directly.
         Path filePath = basePath.resolve(filename).normalize();
-        if (!filePath.startsWith(basePath)) {
-            throw new IOException("Invalid path");
-        }
 
         Resource resource = new UrlResource(filePath.toUri());
         if (resource.exists() && resource.isReadable()) {
             return resource;
         }
         throw new IOException("File not found: " + filename);
-    }
-
-    private boolean isAllowedFileName(String filename) {
-        if (filename == null || filename.trim().isEmpty()) {
-            return false;
-        }
-        if (filename.contains("..") || filename.contains("/") || filename.contains("\\")) {
-            return false;
-        }
-        return filename.toLowerCase().endsWith(".pdf");
     }
 }
