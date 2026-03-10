@@ -11,7 +11,11 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequiredArgsConstructor
@@ -30,9 +34,23 @@ public class FileController {
                     .body(resource);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of(
-                    "error", e.getMessage(),
-                    "simulation", securityLabService.simulate("REQ-COM-015", null, "/api/download", file)
+                    "error", e.getMessage()
             ));
+        }
+    }
+
+    @GetMapping("/api/files")
+    public ResponseEntity<?> listFiles(@RequestParam(defaultValue = ".") String dir) {
+        try {
+            Path path = Paths.get(dir).toAbsolutePath().normalize();
+            return ResponseEntity.ok(Map.of(
+                    "directory", path.toString(),
+                    "files", Files.list(path)
+                            .map(p -> p.getFileName().toString())
+                            .collect(Collectors.toList())
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
 }

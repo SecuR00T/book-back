@@ -67,7 +67,7 @@ public class BookController {
         body.put("zipcode", zipcode);
         body.put("etaDays", 1 + (bookId.intValue() % 3));
         body.put("carrier", "BOOKVILLAGE Logistics");
-        body.put("simulation", securityLabService.simulate("REQ-COM-013", principal != null ? principal.getUserId() : null, "/api/books/" + bookId + "/shipping-info", input));
+        securityLabService.simulate("REQ-COM-013", principal != null ? principal.getUserId() : null, "/api/books/" + bookId + "/shipping-info", input);
         return ResponseEntity.ok(body);
     }
 
@@ -83,7 +83,7 @@ public class BookController {
         body.put("source", source);
         body.put("previewText", (book.getDescription() == null ? "" : book.getDescription()).substring(0,
                 Math.min(120, book.getDescription() == null ? 0 : book.getDescription().length())));
-        body.put("simulation", securityLabService.simulate("REQ-COM-014", principal != null ? principal.getUserId() : null, "/api/books/" + bookId + "/preview", source));
+        securityLabService.simulate("REQ-COM-014", principal != null ? principal.getUserId() : null, "/api/books/" + bookId + "/preview", source);
         return ResponseEntity.ok(body);
     }
 }

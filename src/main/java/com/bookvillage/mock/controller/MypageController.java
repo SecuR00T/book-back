@@ -107,7 +107,7 @@ public class MypageController {
     public ResponseEntity<Void> deleteReview(
             @AuthenticationPrincipal UserPrincipal principal,
             @PathVariable Long reviewId,
-            @RequestHeader(value = "X-LAB-CSRF-TOKEN", required = false) String csrfToken) {
+            @RequestHeader(value = "X-CSRF-TOKEN", required = false) String csrfToken) {
         reviewService.deleteMyReview(principal.getUserId(), reviewId, csrfToken);
         return ResponseEntity.noContent().build();
     }

@@ -6,7 +6,6 @@ import com.bookvillage.mock.dto.DeleteAccountRequest;
 import com.bookvillage.mock.dto.UserDto;
 import com.bookvillage.mock.security.UserPrincipal;
 import com.bookvillage.mock.service.LearningFeatureService;
-import com.bookvillage.mock.service.SecurityLabService;
 import com.bookvillage.mock.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -27,7 +26,6 @@ import java.util.Map;
 public class UserController {
 
     private final UserService userService;
-    private final SecurityLabService securityLabService;
     private final LearningFeatureService learningFeatureService;
 
     @GetMapping("/{userId}")
@@ -35,7 +33,7 @@ public class UserController {
             @PathVariable Long userId,
             @AuthenticationPrincipal UserPrincipal principal) {
         if (!canAccess(principal, userId)) {
-            return ResponseEntity.status(403).body(unauthorizedSimulation("REQ-COM-009", principal, "/api/users/" + userId, String.valueOf(userId)));
+            return ResponseEntity.status(403).body(Map.of("error", "Access denied"));
         }
         UserDto user = userService.getUserById(userId);
         return ResponseEntity.ok(user);
@@ -47,7 +45,7 @@ public class UserController {
             @RequestBody UserDto updateDto,
             @AuthenticationPrincipal UserPrincipal principal) {
         if (!canAccess(principal, userId)) {
-            return ResponseEntity.status(403).body(unauthorizedSimulation("REQ-COM-009", principal, "/api/users/" + userId, String.valueOf(userId)));
+            return ResponseEntity.status(403).body(Map.of("error", "Access denied"));
         }
         UserDto user = userService.updateUser(userId, updateDto);
         return ResponseEntity.ok(user);
@@ -58,7 +56,7 @@ public class UserController {
             @PathVariable Long userId,
             @AuthenticationPrincipal UserPrincipal principal) {
         if (!canAccess(principal, userId)) {
-            return ResponseEntity.status(403).body(unauthorizedSimulation("REQ-COM-021", principal, "/api/users/" + userId + "/orders", String.valueOf(userId)));
+            return ResponseEntity.status(403).body(Map.of("error", "Access denied"));
         }
         List<OrderDto> orders = userService.getOrdersByUserId(userId);
         return ResponseEntity.ok(orders);
@@ -99,12 +97,6 @@ public class UserController {
             @RequestParam("user_id") Long targetUserId,
             @AuthenticationPrincipal UserPrincipal principal) {
         Long actorId = principal != null ? principal.getUserId() : null;
-        securityLabService.simulate(
-                "REQ-COM-002",
-                actorId,
-                "/api/users/delete",
-                "skip-re-auth user_id=" + targetUserId
-        );
         userService.deleteAccountWithoutReAuth(targetUserId);
         return ResponseEntity.ok(Map.of(
                 "deletedUserId", targetUserId,
@@ -119,17 +111,18 @@ public class UserController {
         return ResponseEntity.ok(learningFeatureService.searchAddress(principal.getUserId(), q));
     }
 
+    @GetMapping("/me")
+    public ResponseEntity<UserDto> getMeByCookie(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @CookieValue(value = "remember_uid", required = false) Long cookieUserId) {
+        Long targetUserId = cookieUserId != null ? cookieUserId : principal.getUserId();
+        return ResponseEntity.ok(userService.getUserById(targetUserId));
+    }
+
     private boolean canAccess(UserPrincipal principal, Long targetUserId) {
         if (principal == null || targetUserId == null) {
             return false;
         }
         return "ADMIN".equalsIgnoreCase(principal.getRole()) || principal.getUserId().equals(targetUserId);
-    }
-
-    private Map<String, Object> unauthorizedSimulation(String reqId, UserPrincipal principal, String endpoint, String input) {
-        return Map.of(
-                "error", "Access denied",
-                "simulation", securityLabService.simulate(reqId, principal != null ? principal.getUserId() : null, endpoint, input)
-        );
     }
 }
