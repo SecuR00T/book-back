@@ -2,7 +2,7 @@ spring:
   application:
     name: bookvillage-mock
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3407/bookvillage_mock?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3407/bookvillage_mock?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci}
     username: ${SPRING_DATASOURCE_USERNAME:root}
     password: ${SPRING_DATASOURCE_PASSWORD:1234}
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -25,11 +25,21 @@ server:
   port: 8080
   servlet:
     context-path: /
+    session:
+      timeout: 86400
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+      force-response: true
   error:
     include-message: always
     include-stacktrace: always
     include-exception: true
     include-binding-errors: always
+  tomcat:
+    accesslog:
+      enabled: true
 
 file:
   storage-path: ./uploads/receipts

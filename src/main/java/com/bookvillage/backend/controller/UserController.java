@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * ?띯뫁鍮?? IDOR - userId ???뵬沃섎챸苑?野꺜筌???곸뵠 鈺곌퀬????륁젟 ??됱뒠
+ * 취약점: IDOR - userId 파라미터 변조를 통한 타인 계정 접근 및 삭제
  */
 @RestController
 @RequestMapping("/api/users")

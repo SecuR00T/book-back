@@ -5,12 +5,15 @@ COPY pom.xml ./
 RUN mvn -q -DskipTests dependency:go-offline
 
 COPY src ./src
-RUN mvn -q -DskipTests clean package
+RUN mvn -q -DskipTests -Dproject.build.sourceEncoding=UTF-8 clean package
 
 FROM eclipse-temurin:11-jre
 WORKDIR /app
+ENV LANG=ko_KR.UTF-8
+ENV LC_ALL=ko_KR.UTF-8
+ENV JAVA_TOOL_OPTIONS="-Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8"
 
 COPY --from=build /app/target/*.jar /app/app.jar
 
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "/app/app.jar"]
+ENTRYPOINT ["java", "-Dfile.encoding=UTF-8", "-jar", "/app/app.jar"]

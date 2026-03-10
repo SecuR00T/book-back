@@ -12,8 +12,8 @@ import javax.servlet.http.HttpServletRequest;
 import java.util.List;
 
 /**
- * React SPA ??뺥뒅: frontend ??슢諭?野껉퀗?든몴?src/main/resources/static??癰귣벊沅??롢늺
- * API揶쎛 ?袁⑤빒 筌뤴뫀諭?野껋럥以?癒?퐣 index.html 獄쏆꼹??(?????곷섧????깆뒭??
+ * React SPA 설정: frontend 빌드 결과물을 src/main/resources/static에서 서빙
+ * API 경로가 아닌 요청에 대해 index.html로 폴백 (SPA 라우팅 지원)
  */
 @Configuration
 public class WebMvcConfig implements WebMvcConfigurer {

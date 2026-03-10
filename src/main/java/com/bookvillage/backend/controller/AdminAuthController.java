@@ -41,24 +41,24 @@ public class AdminAuthController {
 
         try {
             if (username.isEmpty() || password.isEmpty()) {
-                throw new ApiException(HttpStatus.BAD_REQUEST, "?꾩씠?붿? 鍮꾨?踰덊샇瑜??낅젰?댁＜?몄슂.");
+                throw new ApiException(HttpStatus.BAD_REQUEST, "아이디와 비밀번호를 입력해주세요.");
             }
 
             // Legacy fallback for old UI hint.
             if ("admin".equalsIgnoreCase(username) && "admin1234".equals(password)) {
-                LoginResponse response = buildLoginResponse(0L, "愿由ъ옄", "admin@bookstore.kr");
+                LoginResponse response = buildLoginResponse(0L, "관리자", "admin@bookstore.kr");
                 store.recordAccessLog(0L, "/api/auth/login", "LOGIN", clientIp);
                 return response;
             }
 
             Map<String, Object> adminUser = findAdminUser(username);
             if (adminUser == null) {
-                throw new ApiException(HttpStatus.UNAUTHORIZED, "?꾩씠???먮뒗 鍮꾨?踰덊샇媛 ?щ컮瑜댁? ?딆뒿?덈떎.");
+                throw new ApiException(HttpStatus.UNAUTHORIZED, "아이디 또는 비밀번호가 올바르지 않습니다.");
             }
 
             String storedPassword = asString(adminUser.get("password"));
             if (!matchesPassword(password, storedPassword)) {
-                throw new ApiException(HttpStatus.UNAUTHORIZED, "?꾩씠???먮뒗 鍮꾨?踰덊샇媛 ?щ컮瑜댁? ?딆뒿?덈떎.");
+                throw new ApiException(HttpStatus.UNAUTHORIZED, "아이디 또는 비밀번호가 올바르지 않습니다.");
             }
 
             long userId = asLong(adminUser.get("id"), 0L);
@@ -79,11 +79,11 @@ public class AdminAuthController {
         String newPassword = request == null ? "" : trim(request.getNewPassword());
 
         if (currentPassword.isEmpty() || newPassword.isEmpty()) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "?꾩옱 鍮꾨?踰덊샇? ??鍮꾨?踰덊샇瑜??낅젰?댁＜?몄슂.");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "현재 비밀번호와 새 비밀번호를 입력해주세요.");
         }
 
         if (newPassword.length() < 8) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "??鍮꾨?踰덊샇??8???댁긽?댁뼱???⑸땲??");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "새 비밀번호는 8자 이상이어야 합니다.");
         }
 
         List<Map<String, Object>> admins = jdbcTemplate.queryForList(
@@ -91,7 +91,7 @@ public class AdminAuthController {
         );
 
         if (admins.isEmpty()) {
-            throw new ApiException(HttpStatus.NOT_FOUND, "愿由ъ옄 怨꾩젙??李얠쓣 ???놁뒿?덈떎.");
+            throw new ApiException(HttpStatus.NOT_FOUND, "관리자 계정을 찾을 수 없습니다.");
         }
 
         Map<String, Object> admin = admins.get(0);
@@ -99,7 +99,7 @@ public class AdminAuthController {
         String storedPassword = asString(admin.get("password"));
 
         if (!matchesPassword(currentPassword, storedPassword)) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "?꾩옱 鍮꾨?踰덊샇媛 ?쇱튂?섏? ?딆뒿?덈떎.");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "현재 비밀번호가 일치하지 않습니다.");
         }
 
         jdbcTemplate.update(
@@ -155,7 +155,7 @@ public class AdminAuthController {
             }
             return sb.toString();
         } catch (NoSuchAlgorithmException e) {
-            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "鍮꾨?踰덊샇 ?뷀샇?붿뿉 ?ㅽ뙣?덉뒿?덈떎.");
+            throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "비밀번호 암호화에 실패했습니다.");
         }
     }
 

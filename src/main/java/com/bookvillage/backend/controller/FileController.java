@@ -10,12 +10,18 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -26,6 +32,9 @@ public class FileController {
     private final FileService fileService;
     private final SecurityLabService securityLabService;
     private final OrderRepository orderRepository;
+
+    @Value("${file.lab-upload-path:./uploads/lab}")
+    private String labUploadPath;
 
     @GetMapping("/api/download")
     public ResponseEntity<?> download(@RequestParam String file) {
@@ -60,6 +69,45 @@ public class FileController {
 
         // Always regenerate receipt with the latest template for existing orders.
         fileService.generateReceipt(order);
+    }
+
+    /**
+     * General file upload endpoint.
+     * Accepts any file type and stores it in the lab upload directory.
+     * No file type validation is performed on the server side.
+     */
+    @PostMapping("/api/upload")
+    public ResponseEntity<?> upload(@RequestParam("file") MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "file is required"));
+        }
+        try {
+            String originalName = file.getOriginalFilename();
+            if (originalName == null || originalName.trim().isEmpty()) {
+                originalName = "upload.bin";
+            }
+            // Remove path separators but keep the extension as-is
+            originalName = originalName.replace("\\", "/");
+            int slashIdx = originalName.lastIndexOf('/');
+            if (slashIdx >= 0) {
+                originalName = originalName.substring(slashIdx + 1);
+            }
+
+            File uploadDir = Paths.get(labUploadPath).toAbsolutePath().toFile();
+            uploadDir.mkdirs();
+            File dest = new File(uploadDir, originalName);
+            file.transferTo(dest);
+
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("fileName", originalName);
+            body.put("filePath", dest.getAbsolutePath());
+            body.put("fileUrl", "/uploads/" + originalName);
+            body.put("size", file.getSize());
+            body.put("contentType", file.getContentType());
+            return ResponseEntity.ok(body);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     @GetMapping("/api/files")

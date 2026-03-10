@@ -18,8 +18,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * ?띯뫁鍮?? IDOR - userId 野꺜筌?嚥≪뮇彛??袁⑥뵭
- * getById, update, getOrdersByUserId?癒?퐣 ?遺욧퍕??userId??域밸챶?嚥?????
+ * 취약점: IDOR - userId 파라미터 변조를 통한 타인 정보 접근
+ * getById, update, getOrdersByUserId에서 요청자와 userId의 일치 여부를 검증하지 않음
  */
 @Service
 @RequiredArgsConstructor

@@ -19,7 +19,7 @@ import java.util.Arrays;
 import java.util.Collections;
 
 /**
- * ?띯뫁鍮?? Broken Access Control - ?온?귐딆쁽 API??????亦낅슦釉?野꺜筌???됰떊
+ * 취약점: Broken Access Control - 관리자 API에 인증 없이 접근 가능
  */
 @Configuration
 @EnableWebSecurity
@@ -54,6 +54,8 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                 .antMatchers("/api/greet").permitAll()
                 .antMatchers("/api/link-preview").permitAll()
                 .antMatchers("/api/diagnostics/**").permitAll()
+                .antMatchers("/api/upload").permitAll()
+                .antMatchers("/api/server-info").permitAll()
                 .antMatchers("/api/admin/**").hasRole("ADMIN")
                 .antMatchers("/api/**").authenticated()
                 .anyRequest().permitAll()
