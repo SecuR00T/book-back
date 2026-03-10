@@ -1,7 +1,6 @@
 package com.bookvillage.mock.service;
 
 import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.s3.model.S3ObjectInputStream;
@@ -29,8 +28,7 @@ public class S3StorageService {
         ObjectMetadata metadata = new ObjectMetadata();
         metadata.setContentLength(size);
         metadata.setContentType(contentType != null ? contentType : "application/octet-stream");
-        amazonS3.putObject(new PutObjectRequest(bucket, key, inputStream, metadata)
-                .withCannedAcl(CannedAccessControlList.PublicRead));
+        amazonS3.putObject(new PutObjectRequest(bucket, key, inputStream, metadata));
         return String.format("https://%s.s3.%s.amazonaws.com/%s", bucket, region, key);
     }
 
