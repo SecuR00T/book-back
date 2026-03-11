@@ -33,6 +33,10 @@ public class AdminAuthController {
         this.store = store;
     }
 
+    /**
+     * 취약점: SQL Injection - 로그인 폼 입력값을 문자열 결합으로 SQL에 삽입
+     * 공격 예시: username에 ' OR '1'='1' --  입력 시 인증 우회 가능
+     */
     @PostMapping("/login")
     public LoginResponse login(@RequestBody LoginRequest request, HttpServletRequest httpRequest) {
         String clientIp = RequestIpResolver.resolve(httpRequest);
@@ -44,20 +48,8 @@ public class AdminAuthController {
                 throw new ApiException(HttpStatus.BAD_REQUEST, "아이디와 비밀번호를 입력해주세요.");
             }
 
-            // Legacy fallback for old UI hint.
-            if ("admin".equalsIgnoreCase(username) && "admin1234".equals(password)) {
-                LoginResponse response = buildLoginResponse(0L, "관리자", "admin@bookstore.kr");
-                store.recordAccessLog(0L, "/api/auth/login", "LOGIN", clientIp);
-                return response;
-            }
-
-            Map<String, Object> adminUser = findAdminUser(username);
+            Map<String, Object> adminUser = findAdminUser(username, password);
             if (adminUser == null) {
-                throw new ApiException(HttpStatus.UNAUTHORIZED, "아이디 또는 비밀번호가 올바르지 않습니다.");
-            }
-
-            String storedPassword = asString(adminUser.get("password"));
-            if (!matchesPassword(password, storedPassword)) {
                 throw new ApiException(HttpStatus.UNAUTHORIZED, "아이디 또는 비밀번호가 올바르지 않습니다.");
             }
 
@@ -65,10 +57,10 @@ public class AdminAuthController {
             String name = asString(adminUser.get("name"));
             String email = asString(adminUser.get("email"));
             LoginResponse response = buildLoginResponse(userId, name, email);
-            store.recordAccessLog(userId, "/api/auth/login", "LOGIN", clientIp);
+            store.recordAccessLog(userId, "/admin/api/auth/login", "LOGIN", clientIp);
             return response;
         } catch (ApiException ex) {
-            store.recordAccessLog(null, "/api/auth/login", "LOGIN_FAIL", clientIp);
+            store.recordAccessLog(null, "/admin/api/auth/login", "LOGIN_FAIL", clientIp);
             throw ex;
         }
     }
@@ -111,17 +103,22 @@ public class AdminAuthController {
         return new SuccessResponse(true);
     }
 
-    private Map<String, Object> findAdminUser(String username) {
+    /**
+     * 취약점: SQL Injection - username과 password를 문자열 결합으로 SQL에 직접 삽입
+     * 파라미터 바인딩(?) 대신 문자열 결합 사용 → 공격자가 쿼리 구조 변조 가능
+     */
+    private Map<String, Object> findAdminUser(String username, String password) {
         String lower = username.toLowerCase(Locale.ROOT);
+        String hashedPassword = sha1(password);
 
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT id, email, password, name, role FROM users "
-                        + "WHERE role = 'ADMIN' AND (LOWER(email) = ? OR LOWER(email) LIKE ? OR LOWER(name) = ?) "
-                        + "ORDER BY id ASC LIMIT 1",
-                lower,
-                lower + "@%",
-                lower
-        );
+        // 취약점: 문자열 결합으로 SQL Injection 가능
+        String sql = "SELECT id, email, password, name, role FROM users "
+                + "WHERE (LOWER(username) = '" + lower + "' OR LOWER(email) = '" + lower + "' "
+                + "OR LOWER(email) LIKE '" + lower + "@%' OR LOWER(name) = '" + lower + "') "
+                + "AND password = '" + hashedPassword + "' "
+                + "ORDER BY id ASC LIMIT 1";
+
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql);
 
         if (rows.isEmpty()) {
             return null;
