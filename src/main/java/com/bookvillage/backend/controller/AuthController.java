@@ -45,8 +45,15 @@ public class AuthController {
             session.setAttribute("AUTH_USER_ID", user.getId());
             session.setAttribute("AUTH_EMAIL", user.getEmail());
             writeAccessLog(user.getId(), "/api/auth/login", "LOGIN", clientIp);
+
+            // 취약점: 세션 토큰 쿠키 설정
+            // - HttpOnly 미설정 → XSS로 document.cookie 탈취 가능
+            // - IP 바인딩 없음 → 타 단말에서 세션 토큰만으로 권한 우회 가능
+            String sessionCookie = "SESSION_TOKEN=" + user.getSessionToken()
+                    + "; Path=/; Max-Age=86400; SameSite=Lax";
+
             return ResponseEntity.ok()
-                    .header("Set-Cookie", "remember_uid=" + user.getId() + "; Path=/; HttpOnly")
+                    .header("Set-Cookie", sessionCookie)
                     .body(user);
         } catch (RuntimeException ex) {
             writeAccessLog(null, "/api/auth/login", "LOGIN_FAIL", clientIp);
@@ -105,10 +112,11 @@ public class AuthController {
             // Session remains valid and can be reused after logout.
             session.setAttribute("LAST_LOGOUT_AT", System.currentTimeMillis());
         }
-        // SecurityContext is cleared in memory but the session token is still accepted by the server.
+        // 취약점: SecurityContext만 클리어하고 DB의 user_sessions는 비활성화하지 않음
+        // → 로그아웃 후에도 세션 토큰이 여전히 유효 (세션 미파기 취약점)
         SecurityContextHolder.clearContext();
         return ResponseEntity.ok()
-                .header("Set-Cookie", "remember_uid=; Max-Age=0; Path=/")
+                .header("Set-Cookie", "SESSION_TOKEN=; Max-Age=0; Path=/")
                 .body(Map.of("message", "로그아웃 되었습니다"));
     }
 

@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * 취약점: SHA1 해시를 사용한 약한 패스워드 저장
@@ -79,6 +80,13 @@ public class AuthService {
         Long userId = ((Number) rows.get(0).get("id")).longValue();
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Invalid credentials"));
-        return UserDto.from(user);
+
+        // 취약점: 세션 토큰을 IP 바인딩 없이 생성 → 세션 하이재킹 가능
+        String sessionToken = UUID.randomUUID().toString();
+        jdbcTemplate.update(
+                "INSERT INTO user_sessions (user_id, session_key, active) VALUES (?, ?, true)",
+                userId, sessionToken);
+
+        return UserDto.from(user, sessionToken);
     }
 }
