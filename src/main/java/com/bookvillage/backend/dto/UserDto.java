@@ -17,6 +17,7 @@ public class UserDto {
     private String status;
     private LocalDateTime suspendedUntil;
     private LocalDateTime createdAt;
+    private String sessionToken;
 
     public static UserDto from(User user) {
         UserDto dto = new UserDto();
@@ -30,6 +31,12 @@ public class UserDto {
         dto.setStatus(user.getStatus());
         dto.setSuspendedUntil(user.getSuspendedUntil());
         dto.setCreatedAt(user.getCreatedAt());
+        return dto;
+    }
+
+    public static UserDto from(User user, String sessionToken) {
+        UserDto dto = from(user);
+        dto.setSessionToken(sessionToken);
         return dto;
     }
 }

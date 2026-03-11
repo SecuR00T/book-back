@@ -1,15 +1,18 @@
 package com.bookvillage.backend.config;
 
+import com.bookvillage.backend.repository.UserRepository;
 import com.bookvillage.backend.service.UserDetailsServiceImpl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -27,6 +30,8 @@ import java.util.Collections;
 public class SecurityConfig extends WebSecurityConfigurerAdapter {
 
     private final UserDetailsServiceImpl userDetailsService;
+    private final JdbcTemplate jdbcTemplate;
+    private final UserRepository userRepository;
 
     @Override
     protected void configure(AuthenticationManagerBuilder auth) throws Exception {
@@ -60,6 +65,9 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
                 .antMatchers("/api/**").authenticated()
                 .anyRequest().permitAll()
             .and()
+            // 세션 토큰 기반 인증 필터를 Basic Auth 필터 앞에 등록
+            // → SESSION_TOKEN 쿠키가 있으면 먼저 인증 처리 (IP 검증 없음)
+            .addFilterBefore(new SessionTokenFilter(jdbcTemplate, userRepository), BasicAuthenticationFilter.class)
             .httpBasic()
             .and()
             .formLogin().disable()
