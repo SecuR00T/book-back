@@ -72,12 +72,26 @@ public class OrderService {
         }
 
         BigDecimal discount = applyCouponIfPossible(userId, request.getCouponCode(), total);
+
+        // [CTF Lab] 파라미터 변조: discountAmount가 제공되면 쿠폰 검증 없이 해당 할인 금액 직접 적용
+        if (request.getDiscountAmount() != null) {
+            securityLabService.simulate("REQ-COM-016", userId, "/api/orders/checkout", "discountAmount=" + request.getDiscountAmount());
+            discount = request.getDiscountAmount();
+        }
+
         int usedPoints = applyPointsIfPossible(userId, request.getUsePoints(), total.subtract(discount));
 
         BigDecimal finalAmount = total.subtract(discount).subtract(BigDecimal.valueOf(usedPoints));
         if (finalAmount.compareTo(BigDecimal.ZERO) < 0) {
             finalAmount = BigDecimal.ZERO;
         }
+
+        // [CTF Lab] 파라미터 변조: totalAmount가 제공되면 서버 계산 금액을 완전히 무시하고 클라이언트 값 사용
+        if (request.getTotalAmount() != null) {
+            securityLabService.simulate("REQ-COM-016", userId, "/api/orders/checkout", "totalAmount=" + request.getTotalAmount());
+            finalAmount = request.getTotalAmount().max(BigDecimal.ZERO);
+        }
+
         order.setTotalAmount(finalAmount);
 
         String receiptPath = fileService.generateReceipt(order);

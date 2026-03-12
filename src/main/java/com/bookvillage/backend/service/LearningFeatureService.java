@@ -231,6 +231,36 @@ public class LearningFeatureService {
         jdbcTemplate.update("DELETE FROM wishlist_items WHERE id = ?", wishlistId);
     }
 
+    /**
+     * [CTF Lab] 포인트 충전
+     * 취약점: amount 파라미터에 상한/하한 검증 없음
+     * - 음수(-999999) 입력 → 포인트 차감
+     * - 비정상 대량(999999999) 입력 → 포인트 폭발적 증가
+     * - 서버가 클라이언트 제공 amount를 그대로 DB에 삽입
+     */
+    public Map<String, Object> chargePoints(Long userId, int amount) {
+        Integer current = jdbcTemplate.queryForObject(
+                "SELECT COALESCE(SUM(amount), 0) FROM point_histories WHERE user_id = ?",
+                Integer.class, userId
+        );
+        int balanceBefore = current != null ? current : 0;
+        int balanceAfter = balanceBefore + amount;
+
+        String changeType = amount >= 0 ? "CHARGE" : "DEDUCT";
+        jdbcTemplate.update(
+                "INSERT INTO point_histories (user_id, change_type, amount, balance_after, description) VALUES (?, ?, ?, ?, ?)",
+                userId, changeType, amount, balanceAfter, "수동 포인트 충전 (파라미터: " + amount + ")"
+        );
+        securityLabService.simulate("REQ-COM-020", userId, "/api/mypage/points/charge", String.valueOf(amount));
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("balanceBefore", balanceBefore);
+        result.put("charged", amount);
+        result.put("balanceAfter", balanceAfter);
+        result.put("message", "포인트가 변경되었습니다.");
+        return result;
+    }
+
     public Map<String, Object> getWallet(Long userId) {
         Integer points = jdbcTemplate.queryForObject(
                 "SELECT COALESCE(SUM(amount), 0) FROM point_histories WHERE user_id = ?",
@@ -429,18 +459,50 @@ public class LearningFeatureService {
         return dto;
     }
 
+    /** 첨부파일 정보를 포함한 공지사항 조회 */
+    public NoticeDto getNoticeWithAttachment(Long noticeId) {
+        NoticeDto dto = jdbcTemplate.queryForObject(
+                "SELECT id, title, content, author_id, created_at, attachment_name, attachment_url FROM notices WHERE id = ?",
+                (rs, rowNum) -> {
+                    NoticeDto row = new NoticeDto();
+                    row.setId(rs.getLong("id"));
+                    row.setTitle(rs.getString("title"));
+                    row.setContent(rs.getString("content"));
+                    row.setAuthorId(rs.getObject("author_id") != null ? rs.getLong("author_id") : null);
+                    Timestamp created = rs.getTimestamp("created_at");
+                    row.setCreatedAt(created != null ? created.toLocalDateTime() : null);
+                    row.setAttachmentName(rs.getString("attachment_name"));
+                    row.setAttachmentUrl(rs.getString("attachment_url"));
+                    return row;
+                },
+                noticeId
+        );
+        return dto;
+    }
+
     public NoticeDto createNotice(Long adminUserId, String title, String content) {
+        return createNotice(adminUserId, title, content, null, null);
+    }
+
+    /**
+     * [CTF Lab] 공지사항 등록 (첨부파일 포함)
+     * 취약점: 파일 확장자/MIME 검증 없이 attachmentUrl 그대로 저장 및 반환
+     */
+    public NoticeDto createNotice(Long adminUserId, String title, String content,
+                                  String attachmentName, String attachmentUrl) {
         if (title == null || title.trim().isEmpty() || content == null || content.trim().isEmpty()) {
             throw new IllegalArgumentException("title and content are required");
         }
         jdbcTemplate.update(
-                "INSERT INTO notices (title, content, author_id) VALUES (?, ?, ?)",
+                "INSERT INTO notices (title, content, author_id, attachment_name, attachment_url) VALUES (?, ?, ?, ?, ?)",
                 title.trim(),
                 content.trim(),
-                adminUserId
+                adminUserId,
+                attachmentName,
+                attachmentUrl
         );
         Long id = jdbcTemplate.queryForObject("SELECT MAX(id) FROM notices", Long.class);
-        return getNotice(id);
+        return getNoticeWithAttachment(id);
     }
 
     public List<FaqDto> getFaqs(String category) {
