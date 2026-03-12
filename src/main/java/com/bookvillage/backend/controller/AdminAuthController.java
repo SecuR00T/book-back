@@ -65,6 +65,34 @@ public class AdminAuthController {
         }
     }
 
+    @PostMapping("/session-login")
+    public LoginResponse sessionLogin(@RequestBody Map<String, String> request) {
+        String sessionToken = request == null ? "" : trim(request.get("sessionToken"));
+        if (sessionToken.isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "세션 토큰이 필요합니다.");
+        }
+
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                "SELECT u.id, u.name, u.email, u.role FROM user_sessions s " +
+                "JOIN users u ON s.user_id = u.id " +
+                "WHERE s.session_key = ? AND s.active = true AND u.status != 'DELETED'",
+                sessionToken
+        );
+
+        if (rows.isEmpty()) {
+            throw new ApiException(HttpStatus.UNAUTHORIZED, "유효하지 않은 세션 토큰입니다.");
+        }
+
+        Map<String, Object> user = rows.get(0);
+        String role = asString(user.get("role"));
+        if (!"ADMIN".equalsIgnoreCase(role)) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "관리자 권한이 없습니다.");
+        }
+
+        long userId = asLong(user.get("id"), 0L);
+        return buildLoginResponse(userId, asString(user.get("name")), asString(user.get("email")));
+    }
+
     @PostMapping("/change-password")
     public SuccessResponse changePassword(@RequestBody ChangePasswordRequest request) {
         String currentPassword = request == null ? "" : trim(request.getCurrentPassword());

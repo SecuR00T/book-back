@@ -35,7 +35,7 @@ public class AuthTokenFilter extends OncePerRequestFilter {
             return;
         }
 
-        if ("OPTIONS".equalsIgnoreCase(request.getMethod()) || "/admin/api/auth/login".equals(path)) {
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod()) || "/admin/api/auth/login".equals(path) || "/admin/api/auth/session-login".equals(path)) {
             filterChain.doFilter(request, response);
             return;
         }
