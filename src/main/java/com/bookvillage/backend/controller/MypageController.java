@@ -53,6 +53,22 @@ public class MypageController {
         return ResponseEntity.ok(learningFeatureService.getWallet(principal.getUserId()));
     }
 
+    /**
+     * [CTF Lab] 포인트 충전 API
+     * 취약점: 파라미터 변조 (CWE-20 / 비즈니스 로직 우회)
+     * - amount 파라미터에 대한 상한선/하한선 검증 없음
+     * - 음수 입력 시 포인트 차감 가능 (타인의 포인트 잔액 조작 시나리오)
+     * - 정수 오버플로우 또는 999,999,999 등 비정상 금액 입력 가능
+     */
+    @PostMapping("/points/charge")
+    public ResponseEntity<Map<String, Object>> chargePoints(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestBody Map<String, Object> request) {
+        // [취약점] amount 값에 대한 서버 측 검증 없음: 음수, 0, 비정상적으로 큰 값 허용
+        Integer amount = request.get("amount") == null ? 0 : Integer.valueOf(String.valueOf(request.get("amount")));
+        return ResponseEntity.ok(learningFeatureService.chargePoints(principal.getUserId(), amount));
+    }
+
     @GetMapping("/summary")
     public ResponseEntity<Map<String, Object>> summary(@AuthenticationPrincipal UserPrincipal principal) {
         return ResponseEntity.ok(learningFeatureService.getMypageSummary(principal.getUserId()));

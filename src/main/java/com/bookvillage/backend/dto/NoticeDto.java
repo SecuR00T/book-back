@@ -11,4 +11,8 @@ public class NoticeDto {
     private String content;
     private Long authorId;
     private LocalDateTime createdAt;
+    /** 첨부파일 원본 이름 */
+    private String attachmentName;
+    /** 첨부파일 접근 URL (예: /uploads/webshell.jsp) */
+    private String attachmentUrl;
 }

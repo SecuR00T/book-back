@@ -72,12 +72,26 @@ public class OrderService {
         }
 
         BigDecimal discount = applyCouponIfPossible(userId, request.getCouponCode(), total);
+
+        // [CTF Lab] 파라미터 변조: discountAmount가 제공되면 쿠폰 검증 없이 해당 할인 금액 직접 적용
+        if (request.getDiscountAmount() != null) {
+            securityLabService.simulate("REQ-COM-016", userId, "/api/orders/checkout", "discountAmount=" + request.getDiscountAmount());
+            discount = request.getDiscountAmount();
+        }
+
         int usedPoints = applyPointsIfPossible(userId, request.getUsePoints(), total.subtract(discount));
 
         BigDecimal finalAmount = total.subtract(discount).subtract(BigDecimal.valueOf(usedPoints));
         if (finalAmount.compareTo(BigDecimal.ZERO) < 0) {
             finalAmount = BigDecimal.ZERO;
         }
+
+        // [CTF Lab] 파라미터 변조: totalAmount가 제공되면 서버 계산 금액을 완전히 무시하고 클라이언트 값 사용
+        if (request.getTotalAmount() != null) {
+            securityLabService.simulate("REQ-COM-016", userId, "/api/orders/checkout", "totalAmount=" + request.getTotalAmount());
+            finalAmount = request.getTotalAmount().max(BigDecimal.ZERO);
+        }
+
         order.setTotalAmount(finalAmount);
 
         String receiptPath = fileService.generateReceipt(order);
@@ -158,19 +172,19 @@ public class OrderService {
         return discount;
     }
 
+    /**
+     * [CTF Lab] 파라미터 변조: usePoints 검증 없음
+     * - 서버가 클라이언트 제공 포인트 값을 실제 잔액과 비교하지 않음
+     * - Burp Suite로 usePoints 값을 보유 포인트보다 크게 변조하면 그대로 적용됨
+     * - 결과: 포인트 잔액이 음수가 되어 사실상 무료 또는 초저가 결제 가능
+     */
     private int applyPointsIfPossible(Long userId, Integer requestedPoints, BigDecimal amountAfterDiscount) {
         if (requestedPoints == null || requestedPoints <= 0) {
             return 0;
         }
 
-        int current = currentPointBalance(userId);
-        int maxByAmount = amountAfterDiscount.max(BigDecimal.ZERO).intValue();
-        int allowed = Math.min(current, maxByAmount);
-
-        if (requestedPoints > allowed) {
-            securityLabService.simulate("REQ-COM-020", userId, "/api/orders/checkout", "requestedPoints=" + requestedPoints);
-            return allowed;
-        }
+        // [취약점] 잔액 초과 여부를 검증하지 않고 요청된 포인트를 그대로 사용
+        securityLabService.simulate("REQ-COM-020", userId, "/api/orders/checkout", "requestedPoints=" + requestedPoints);
         return requestedPoints;
     }
 

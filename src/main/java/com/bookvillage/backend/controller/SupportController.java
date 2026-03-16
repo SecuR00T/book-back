@@ -26,7 +26,8 @@ public class SupportController {
 
     @GetMapping("/api/notices/{noticeId}")
     public ResponseEntity<NoticeDto> noticeDetail(@PathVariable Long noticeId) {
-        return ResponseEntity.ok(learningFeatureService.getNotice(noticeId));
+        // 첨부파일(attachmentName, attachmentUrl) 포함하여 반환
+        return ResponseEntity.ok(learningFeatureService.getNoticeWithAttachment(noticeId));
     }
 
     @GetMapping("/api/faqs")
