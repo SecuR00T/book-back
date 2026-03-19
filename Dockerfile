@@ -23,5 +23,4 @@ RUN if ! getent group ubuntu >/dev/null; then groupadd --gid ${APP_GID} ubuntu; 
 COPY --from=build --chown=ubuntu:ubuntu /app/target/*.jar /app/app.jar
 
 EXPOSE 8080
-USER ubuntu
 ENTRYPOINT ["java", "-Dfile.encoding=UTF-8", "-jar", "/app/app.jar"]
